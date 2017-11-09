@@ -18,7 +18,6 @@ class PumpOpsSynchronousBuildFromFramesTests: XCTestCase {
     var pumpState: PumpState!
     var pumpID: String!
     var pumpRegion: PumpRegion!
-    var rileyLinkCmdSession: RileyLinkCmdSession!
     var pumpModel: PumpModel!
     var messageSenderStub: PumpMessageSenderStub!
     var timeZone: TimeZone!
@@ -29,8 +28,7 @@ class PumpOpsSynchronousBuildFromFramesTests: XCTestCase {
         pumpID = "350535"
         pumpRegion = .worldWide
         pumpModel = PumpModel.model523
-        
-        rileyLinkCmdSession = RileyLinkCmdSession()
+
         messageSenderStub = PumpMessageSenderStub()
         timeZone = TimeZone(secondsFromGMT: 0)
         
@@ -42,7 +40,7 @@ class PumpOpsSynchronousBuildFromFramesTests: XCTestCase {
         pumpState.pumpModel = pumpModel
         pumpState.awakeUntil = Date(timeIntervalSinceNow: 100) // pump is awake
         
-        sut = PumpOpsSynchronous(pumpState: pumpState, session: rileyLinkCmdSession, pumpMessageSender: messageSenderStub)
+        sut = PumpOpsSynchronous(pumpState: pumpState, session: messageSenderStub)
     }
     
     func testErrorIsntThrown() {

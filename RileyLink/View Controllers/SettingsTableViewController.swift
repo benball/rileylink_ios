@@ -7,12 +7,17 @@
 //
 
 import UIKit
-import RileyLinkKit
 import MinimedKit
+import RileyLinkKit
+import RileyLinkKitUI
 
 private let ConfigCellIdentifier = "ConfigTableViewCell"
 
 private let TapToSetString = NSLocalizedString("Tap to set", comment: "The empty-state text for a configuration value")
+
+
+extension TextFieldTableViewController: IdentifiableClass { }
+
 
 class SettingsTableViewController: UITableViewController, TextFieldTableViewControllerDelegate {
 
@@ -142,7 +147,18 @@ class SettingsTableViewController: UITableViewController, TextFieldTableViewCont
 
             switch ConfigurationRow(rawValue: indexPath.row)! {
             case .pumpID:
-                performSegue(withIdentifier: TextFieldTableViewController.className, sender: sender)
+                let vc = TextFieldTableViewController()
+
+                vc.placeholder = NSLocalizedString("Enter the 6-digit pump ID", comment: "The placeholder text instructing users how to enter a pump ID")
+                vc.value = DeviceDataManager.sharedManager.pumpID
+
+                if let cell = tableView.cellForRow(at: indexPath) {
+                    vc.title = cell.textLabel?.text
+                }
+                vc.indexPath = indexPath
+                vc.delegate = self
+
+                show(vc, sender: indexPath)
             case .pumpRegion:
                 let vc = RadioSelectionTableViewController.pumpRegion(dataManager.pumpRegion)
                 vc.title = sender?.textLabel?.text
@@ -174,32 +190,6 @@ class SettingsTableViewController: UITableViewController, TextFieldTableViewCont
         }
     }
 
-    // MARK: - Navigation
-
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if let
-            cell = sender as? UITableViewCell,
-            let indexPath = tableView.indexPath(for: cell)
-        {
-            switch segue.destination {
-            case let vc as TextFieldTableViewController:
-                switch ConfigurationRow(rawValue: indexPath.row)! {
-                case .pumpID:
-                    vc.placeholder = NSLocalizedString("Enter the 6-digit pump ID", comment: "The placeholder text instructing users how to enter a pump ID")
-                    vc.value = DeviceDataManager.sharedManager.pumpID
-                default:
-                    break
-                }
-                
-                vc.title = cell.textLabel?.text
-                vc.indexPath = indexPath
-                vc.delegate = self
-            default:
-                break
-            }
-        }
-    }
-
     // MARK: - Uploader management
 
     @objc func uploadEnabledChanged(_ sender: UISwitch) {
@@ -225,6 +215,10 @@ class SettingsTableViewController: UITableViewController, TextFieldTableViewCont
         }
 
         tableView.reloadData()
+    }
+
+    func textFieldTableViewControllerDidReturn(_ controller: TextFieldTableViewController) {
+
     }
 }
 

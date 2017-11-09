@@ -8,8 +8,6 @@
 
 @import CoreData;
 #import "Config.h"
-#import "RileyLinkRecord.h"
-#import "RileyLink-Swift.h"
 #import <UIKit/UIKit.h>
 
 @implementation Config

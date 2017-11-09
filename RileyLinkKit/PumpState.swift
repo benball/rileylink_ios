@@ -64,10 +64,15 @@ public class PumpState {
         return false
     }
 
-    public var lastValidFrequency: Double? 
+    // TODO: This is device-specific
+    public var lastValidFrequency: Measurement<UnitFrequency>?
+
+    // TODO: This is device-specific
+    public var lastTuned: Date?
     
     public var lastWakeAttempt: Date?
-    
+
+    // TODO: Use KVO instead
     private func postChangeNotificationForKey(_ key: String, oldValue: Any?)  {
         var userInfo: [String: Any] = [
             type(of: self).PropertyKey: key
@@ -96,6 +101,8 @@ extension PumpState: CustomDebugStringConvertible {
             "lastHistoryDump: \(lastHistoryDump ?? .distantPast)",
             "awakeUntil: \(awakeUntil ?? .distantPast)",
             "lastWakeAttempt: \(String(describing: lastWakeAttempt))",
+            "lastValidFrequency: \(String(describing: lastValidFrequency))",
+            "lastTuned: \(String(describing: lastTuned))",
         ].joined(separator: "\n")
     }
 }

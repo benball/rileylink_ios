@@ -18,6 +18,10 @@ extension TimeInterval {
         return self.init(minutes: minutes)
     }
 
+    static func milliseconds(_ milliseconds: Double) -> TimeInterval {
+        return self.init(milliseconds / 1000)
+    }
+
     init(minutes: Double) {
         self.init(minutes * 60)
     }

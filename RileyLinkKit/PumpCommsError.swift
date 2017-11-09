@@ -8,6 +8,7 @@
 
 import Foundation
 import MinimedKit
+import RileyLinkBLEKit
 
 
 /// An error that occurs during a command run
@@ -21,16 +22,16 @@ public enum PumpCommandError: Error {
 
 public enum PumpCommsError: Error {
     case bolusInProgress
-    case crosstalk(PumpMessage, during: String)
-    case noResponse(during: String)
+    case crosstalk(PumpMessage, during: CustomStringConvertible)
+    case noResponse(during: CustomStringConvertible)
+    case peripheralError(LocalizedError)
     case pumpError(PumpErrorCode)
     case pumpSuspended
     case rfCommsFailure(String)
-    case rileyLinkTimeout
     case unexpectedResponse(PumpMessage, from: PumpMessage)
     case unknownPumpErrorCode(UInt8)
     case unknownPumpModel
-    case unknownResponse(rx: String, during: String)
+    case unknownResponse(rx: String, during: CustomStringConvertible)
 }
 
 public enum SetBolusError: Error {
@@ -86,8 +87,6 @@ extension PumpCommsError: LocalizedError {
             return NSLocalizedString("Pump is suspended.", comment: "")
         case .rfCommsFailure(let msg):
             return msg
-        case .rileyLinkTimeout:
-            return NSLocalizedString("RileyLink timed out.", comment: "")
         case .unexpectedResponse:
             return NSLocalizedString("Pump responded unexpectedly.", comment: "")
         case .unknownPumpErrorCode(let code):
@@ -98,6 +97,8 @@ extension PumpCommsError: LocalizedError {
             return NSLocalizedString("Unknown response from pump.", comment: "")
         case .pumpError(let errorCode):
             return String(format: NSLocalizedString("Pump error: %1$@", comment: "The format string description of a Pump Error. (1: The specific error code)"),String(describing: errorCode))
+        case .peripheralError(let error):
+            return String(format: NSLocalizedString("Peripheral communication failed: %@", comment: "Pump comms failure reason for an underlying peripheral error"), error.failureReason ?? "")
         }
     }
 }

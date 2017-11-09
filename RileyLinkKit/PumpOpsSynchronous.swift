@@ -15,29 +15,18 @@ public enum RXFilterMode: UInt8 {
     case narrow = 0x90  // 150KHz
 }
 
+// TODO: Convert logging
 class PumpOpsSynchronous {
 
-    public static let PacketKey = "com.rileylink.RileyLinkKit.PumpOpsSynchronousPacketKey"
-
-    private static let standardPumpResponseWindow: UInt32 = 180
-    
     // After
     private let minimumTimeBetweenWakeAttempts = TimeInterval(minutes: 1)
-    
-    let messageSender: PumpMessageSender
+
     let pump: PumpState
-    let session: RileyLinkCmdSession
+    let session: PumpMessageSender
     
-    init(pumpState: PumpState, session: RileyLinkCmdSession, pumpMessageSender: PumpMessageSender) {
+    init(pumpState: PumpState, session: PumpMessageSender) {
         self.pump = pumpState
         self.session = session
-        self.messageSender = pumpMessageSender
-    }
-    
-    init(pumpState: PumpState, session: RileyLinkCmdSession) {
-        self.pump = pumpState
-        self.session = session
-        self.messageSender = PumpOpsCommunication(session: session)
     }
 
     internal func makePumpMessage(to messageType: MessageType, using body: MessageBody = CarelinkShortMessageBody()) -> PumpMessage {
@@ -49,11 +38,10 @@ class PumpOpsSynchronous {
     /// If successful, still does not fully wake up the pump - only alerts it such that the longer wakeup message can be sent next.
     ///
     /// - Throws:
-    ///   - PumpCommsError.rileyLinkTimeout
-    ///   - PumpCommsError.unknownResponse
-    ///   - PumpCommsError.noResponse
-    ///   - PumpCommsError.crosstalk
-    ///   - PumpCommsError.unexpectedResponse
+    ///     - PumpCommsError.crosstalk
+    ///     - PumpCommsError.noResponse
+    ///     - PumpCommsError.peripheralError
+    ///     - PumpCommsError.unknownResponse
     private func sendWakeUpBurst() throws {
         var lastError: Error?
         
@@ -65,14 +53,14 @@ class PumpOpsSynchronous {
             // Older pumps have a longer sleep cycle between wakeups, so send an initial burst
             do {
                 let shortPowerMessage = makePumpMessage(to: .powerOn)
-                _ = try messageSender.sendAndListen(shortPowerMessage, timeoutMS: 1, repeatCount: 255, msBetweenPackets: 0, retryCount: 0)
+                _ = try session.sendAndListen(shortPowerMessage, timeoutMS: 1, repeatCount: 255, msBetweenPackets: 0, retryCount: 0)
             }
             catch { }
         }
 
         do {
             let shortPowerMessage = makePumpMessage(to: .powerOn)
-            let shortResponse = try messageSender.sendAndListen(shortPowerMessage, timeoutMS: 12000, repeatCount: 255, msBetweenPackets: 0, retryCount: 0)
+            let shortResponse = try session.sendAndListen(shortPowerMessage, timeoutMS: 12000, repeatCount: 255, msBetweenPackets: 0, retryCount: 0)
 
             if shortResponse.messageType == .pumpAck {
                 // Pump successfully received and responded to short wakeup message!
@@ -95,8 +83,8 @@ class PumpOpsSynchronous {
     private func pumpResponding() -> Bool {
         do {
             let msg = makePumpMessage(to: .getPumpModel)
-            let response = try messageSender.sendAndListen(msg, retryCount: 1)
-            
+            let response = try session.sendAndListen(msg, retryCount: 1)
+
             if response.messageType == .getPumpModel && response.messageBody is GetPumpModelCarelinkMessageBody {
                 return true
             }
@@ -106,11 +94,10 @@ class PumpOpsSynchronous {
     }
 
     /// - Throws:
-    ///   - PumpCommsError.rileyLinkTimeout
-    ///   - PumpCommsError.unknownResponse
-    ///   - PumpCommsError.noResponse
-    ///   - PumpCommsError.crosstalk
-    ///   - PumpCommsError.unexpectedResponse
+    ///     - PumpCommsError.crosstalk
+    ///     - PumpCommsError.noResponse
+    ///     - PumpCommsError.peripheralError
+    ///     - PumpCommsError.unknownResponse
     private func wakeup(_ duration: TimeInterval = TimeInterval(minutes: 1)) throws {
         guard !pump.isAwake else {
             return
@@ -123,11 +110,11 @@ class PumpOpsSynchronous {
             pump.awakeUntil = Date(timeIntervalSinceNow: TimeInterval(minutes: 1))
             return
         }
-        
+
         try sendWakeUpBurst()
         
         let longPowerMessage = makePumpMessage(to: .powerOn, using: PowerOnCarelinkMessageBody(duration: duration))
-        let longResponse = try messageSender.sendAndListen(longPowerMessage)
+        let longResponse = try session.sendAndListen(longPowerMessage)
         
         guard longResponse.messageType == .pumpAck else {
             throw PumpCommsError.unexpectedResponse(longResponse, from: longPowerMessage)
@@ -143,7 +130,7 @@ class PumpOpsSynchronous {
             try wakeup()
         
             let shortMsg = makePumpMessage(to: msg.messageType)
-            let shortResponse = try messageSender.sendAndListen(shortMsg)
+            let shortResponse = try session.sendAndListen(shortMsg)
         
             guard shortResponse.messageType == .pumpAck else {
                 throw PumpCommsError.unexpectedResponse(shortResponse, from: shortMsg)
@@ -153,7 +140,7 @@ class PumpOpsSynchronous {
         }
 
         do {
-            let response = try messageSender.sendAndListen(msg)
+            let response = try session.sendAndListen(msg)
         
             guard response.messageType == responseMessageType else {
                 throw PumpCommsError.unexpectedResponse(response, from: msg)
@@ -166,11 +153,10 @@ class PumpOpsSynchronous {
     }
 
     /// - Throws:
-    ///   - PumpCommsError.rileyLinkTimeout
-    ///   - PumpCommsError.unknownResponse
-    ///   - PumpCommsError.noResponse
-    ///   - PumpCommsError.crosstalk
-    ///   - PumpCommsError.unexpectedResponse
+    ///     - PumpCommsError.crosstalk
+    ///     - PumpCommsError.noResponse
+    ///     - PumpCommsError.peripheralError
+    ///     - PumpCommsError.unknownResponse
     internal func getPumpModelNumber() throws -> String {
         let body: GetPumpModelCarelinkMessageBody = try messageBody(to: .getPumpModel)
         return body.model
@@ -189,7 +175,7 @@ class PumpOpsSynchronous {
         var msg = makePumpMessage(to: .readProfileSTD512)
         var scheduleData = Data()
         while (!finished) {
-            let response = try messageSender.sendAndListen(msg)
+            let response = try session.sendAndListen(msg)
             
             guard response.messageType == .readProfileSTD512,
                 let body = response.messageBody as? DataFrameMessageBody else {
@@ -223,16 +209,15 @@ class PumpOpsSynchronous {
     }
 
     /// - Throws:
-    ///   - PumpCommsError.rileyLinkTimeout
-    ///   - PumpCommsError.unknownResponse
-    ///   - PumpCommsError.noResponse
-    ///   - PumpCommsError.crosstalk
-    ///   - PumpCommsError.unexpectedResponse
+    ///     - PumpCommsError.crosstalk
+    ///     - PumpCommsError.noResponse
+    ///     - PumpCommsError.peripheralError
+    ///     - PumpCommsError.unknownResponse
     internal func messageBody<T: MessageBody>(to messageType: MessageType) throws -> T {
         try wakeup()
         
         let msg = makePumpMessage(to: messageType)
-        let response = try messageSender.sendAndListen(msg)
+        let response = try session.sendAndListen(msg)
         
         guard response.messageType == messageType, let body = response.messageBody as? T else {
             throw PumpCommsError.unexpectedResponse(response, from: msg)
@@ -249,10 +234,10 @@ class PumpOpsSynchronous {
         
         for attempt in 0..<3 {
             do {
-                _ = try messageSender.sendAndListen(makePumpMessage(to: changeMessage.messageType))
+                _ = try session.sendAndListen(makePumpMessage(to: changeMessage.messageType))
                 
                 do {
-                    let response = try messageSender.sendAndListen(changeMessage, retryCount: 0)
+                    let response = try session.sendAndListen(changeMessage, retryCount: 0)
                     if let errorMsg = response.messageBody as? PumpErrorMessageBody {
                         switch errorMsg.errorCode {
                         case .known(let errorCode):
@@ -285,44 +270,48 @@ class PumpOpsSynchronous {
         try wakeup()
 
         let shortMessage = makePumpMessage(to: .changeTime)
-        let shortResponse = try messageSender.sendAndListen(shortMessage)
+        let shortResponse = try session.sendAndListen(shortMessage)
         
         guard shortResponse.messageType == .pumpAck else {
             throw PumpCommsError.unexpectedResponse(shortResponse, from: shortMessage)
         }
 
         let message = messageGenerator()
-        let response = try messageSender.sendAndListen(message)
+        let response = try session.sendAndListen(message)
         
         guard response.messageType == .pumpAck else {
             throw PumpCommsError.unexpectedResponse(response, from: message)
         }
     }
 
+    /// - Throws:
+    ///     - PumpCommsError.crosstalk
+    ///     - PumpCommsError.noResponse
+    ///     - PumpCommsError.peripheralError
+    ///     - PumpCommsError.unexpectedResponse
+    ///     - PumpCommsError.unknownResponse
     internal func changeWatchdogMarriageProfile(_ watchdogID: Data) throws {
-        let commandTimeoutMS: UInt32 = 30_000
+        let commandTimeout: TimeInterval = 30
+        let commandTimeoutMS = UInt32(clamping: Int(commandTimeout.milliseconds))
 
         // Wait for the pump to start polling
-        let listenForFindMessageCmd = GetPacketCmd()
-        listenForFindMessageCmd.listenChannel = 0
-        listenForFindMessageCmd.timeoutMS = commandTimeoutMS
+        let listenForFindMessage = GetPacket(
+            listenChannel: 0,
+            timeoutMS: commandTimeoutMS
+        )
 
-        guard session.doCmd(listenForFindMessageCmd, timeoutMs: Int(commandTimeoutMS) + Int(EXPECTED_MAX_BLE_LATENCY_MS)) else {
-            throw PumpCommsError.rileyLinkTimeout
-        }
-        
-        guard let encodedData = listenForFindMessageCmd.receivedPacket?.data else {
+        guard let encodedData = try session.writeCommandExpectingPacket(listenForFindMessage, timeout: commandTimeout)?.data else {
             throw PumpCommsError.noResponse(during: "Watchdog listening")
         }
-        
+
         guard let packet = MinimedPacket(encodedData: encodedData) else {
-            // Encoding or CRC error
-            throw PumpCommsError.unknownResponse(rx: encodedData.hexadecimalString, during: "Sent \(listenForFindMessageCmd)")
+            // TODO: Change error to better reflect that this is an encoding or CRC error
+            throw PumpCommsError.unknownResponse(rx: encodedData.hexadecimalString, during: "Watchdog listening")
         }
         
         guard let findMessage = PumpMessage(rxData: packet.data) else {
             // Unknown packet type or message type
-            throw PumpCommsError.unknownResponse(rx: packet.data.hexadecimalString, during: "Sent \(listenForFindMessageCmd)")
+            throw PumpCommsError.unknownResponse(rx: packet.data.hexadecimalString, during: "Watchdog listening")
         }
 
         guard findMessage.address.hexadecimalString == pump.pumpID && findMessage.packetType == .mySentry,
@@ -334,7 +323,7 @@ class PumpOpsSynchronous {
         // Identify as a MySentry device
         let findMessageResponse = PumpMessage(packetType: .mySentry, address: pump.pumpID, messageType: .pumpAck, messageBody: findMessageResponseBody)
 
-        let linkMessage = try messageSender.sendAndListen(findMessageResponse, timeoutMS: commandTimeoutMS)
+        let linkMessage = try session.sendAndListen(findMessageResponse, timeoutMS: commandTimeoutMS)
 
         guard let
             linkMessageBody = linkMessage.messageBody as? DeviceLinkMessageBody,
@@ -346,9 +335,7 @@ class PumpOpsSynchronous {
         // Acknowledge the pump linked with us
         let linkMessageResponse = PumpMessage(packetType: .mySentry, address: pump.pumpID, messageType: .pumpAck, messageBody: linkMessageResponseBody)
 
-        let cmd = SendPacketCmd()
-        cmd.outgoingData = MinimedPacket(outgoingData: linkMessageResponse.txData).encodedData()
-        _ = session.doCmd(cmd, timeoutMs: Int(EXPECTED_MAX_BLE_LATENCY_MS))
+        try session.send(linkMessageResponse)
     }
 
     internal func setRXFilterMode(_ mode: RXFilterMode) throws {
@@ -387,12 +374,12 @@ class PumpOpsSynchronous {
             scanFrequencies = [916.45, 916.50, 916.55, 916.60, 916.65, 916.70, 916.75, 916.80]
         }
         
-        return try scanForPump(in: scanFrequencies)
+        return try scanForPump(in: scanFrequencies.map { Measurement(value: $0, unit: .megahertz) })
     }
     
-    internal func scanForPump(in frequencies: [Double]) throws -> FrequencyScanResults {
+    internal func scanForPump(in frequencies: [Measurement<UnitFrequency>]) throws -> FrequencyScanResults {
         
-        var results = FrequencyScanResults()
+        var trials = [FrequencyTrial]()
         
         let middleFreq = frequencies[frequencies.count / 2]
         
@@ -406,44 +393,43 @@ class PumpOpsSynchronous {
         
         for freq in frequencies {
             let tries = 3
-            var trial = FrequencyTrial()
-            trial.frequencyMHz = freq
+            var trial = FrequencyTrial(frequency: freq)
+
             try session.setBaseFrequency(freq)
             var sumRSSI = 0
             for _ in 1...tries {
-                let msg = makePumpMessage(to: .getPumpModel)
-                let cmd = SendAndListenCmd()
-                cmd.outgoingData = MinimedPacket(outgoingData: msg.txData).encodedData()
-                cmd.timeoutMS = type(of: self).standardPumpResponseWindow
-                if session.doCmd(cmd, timeoutMs: Int(EXPECTED_MAX_BLE_LATENCY_MS)) {
-                    
-                    if let rfPacket = cmd.receivedPacket,
-                        let pkt = MinimedPacket(encodedData: rfPacket.data),
-                        let response = PumpMessage(rxData: pkt.data), response.messageType == .getPumpModel {
-                        sumRSSI += rfPacket.rssi
-                        trial.successes += 1
-                    }
-                } else {
-                    throw PumpCommsError.rileyLinkTimeout
+                // Ignore failures here
+                let rfPacket = try? session.sendAndListenForPacket(makePumpMessage(to: .getPumpModel))
+                if  let rfPacket = rfPacket,
+                    let pkt = MinimedPacket(encodedData: rfPacket.data),
+                    let response = PumpMessage(rxData: pkt.data), response.messageType == .getPumpModel
+                {
+                    sumRSSI += rfPacket.rssi
+                    trial.successes += 1
                 }
                 trial.tries += 1
             }
             // Mark each failure as a -99 rssi, so we can use highest rssi as best freq
             sumRSSI += -99 * (trial.tries - trial.successes)
             trial.avgRSSI = Double(sumRSSI) / Double(trial.tries)
-            results.trials.append(trial)
+            trials.append(trial)
         }
-        let sortedTrials = results.trials.sorted(by: { (a, b) -> Bool in
+        let sortedTrials = trials.sorted(by: { (a, b) -> Bool in
             return a.avgRSSI > b.avgRSSI
         })
-        if sortedTrials.first!.successes > 0 {
-            results.bestFrequency = sortedTrials.first!.frequencyMHz
-            try session.setBaseFrequency(results.bestFrequency)
-            pump.lastValidFrequency = results.bestFrequency
-        } else {
+
+        guard sortedTrials.first!.successes > 0 else {
             try session.setBaseFrequency(pump.lastValidFrequency ?? middleFreq)
             throw PumpCommsError.rfCommsFailure("No pump responses during scan")
         }
+
+        let results = FrequencyScanResults(
+            trials: trials,
+            bestFrequency: sortedTrials.first!.frequency
+        )
+
+        try session.setBaseFrequency(results.bestFrequency)
+        pump.lastValidFrequency = results.bestFrequency
         
         return results
     }
@@ -563,7 +549,7 @@ class PumpOpsSynchronous {
             expectedFrameNum += 1
             let msg = makePumpMessage(to: .pumpAck)
             if !curResp.lastFrame {
-                guard let resp = try? messageSender.sendAndListen(msg) else {
+                guard let resp = try? session.sendAndListen(msg) else {
                     throw PumpCommsError.rfCommsFailure("Did not receive frame data from pump")
                 }
                 guard resp.packetType == .carelink && resp.messageType == .getHistoryPage else {
@@ -571,9 +557,7 @@ class PumpOpsSynchronous {
                 }
                 curResp = resp.messageBody as! GetHistoryPageCarelinkMessageBody
             } else {
-                let cmd = SendPacketCmd()
-                cmd.outgoingData = MinimedPacket(outgoingData: msg.txData).encodedData()
-                _ = session.doCmd(cmd, timeoutMs: Int(EXPECTED_MAX_BLE_LATENCY_MS))
+                try session.send(msg)
                 break
             }
         }
@@ -675,7 +659,7 @@ class PumpOpsSynchronous {
             expectedFrameNum += 1
             let msg = makePumpMessage(to: .pumpAck)
             if !curResp.lastFrame {
-                guard let resp = try? messageSender.sendAndListen(msg) else {
+                guard let resp = try? session.sendAndListen(msg) else {
                     throw PumpCommsError.rfCommsFailure("Did not receive frame data from pump")
                 }
                 guard resp.packetType == .carelink && resp.messageType == .getGlucosePage else {
@@ -683,9 +667,7 @@ class PumpOpsSynchronous {
                 }
                 curResp = resp.messageBody as! GetGlucosePageMessageBody
             } else {
-                let cmd = SendPacketCmd()
-                cmd.outgoingData = MinimedPacket(outgoingData: msg.txData).encodedData()
-                _ = session.doCmd(cmd, timeoutMs: Int(EXPECTED_MAX_BLE_LATENCY_MS))
+                try session.send(msg)
                 break
             }
         }
@@ -698,7 +680,7 @@ class PumpOpsSynchronous {
     
     internal func writeGlucoseHistoryTimestamp() throws -> Void {
         let shortWriteTimestamp = makePumpMessage(to: .writeGlucoseHistoryTimestamp)
-        let shortResponse = try messageSender.sendAndListen(shortWriteTimestamp, timeoutMS: 12000)
+        let shortResponse = try session.sendAndListen(shortWriteTimestamp, timeoutMS: 12000)
         
         if shortResponse.messageType == .pumpAck {
             return
@@ -805,14 +787,14 @@ public struct FrequencyTrial {
     public var tries: Int = 0
     public var successes: Int = 0
     public var avgRSSI: Double = -99
-    public var frequencyMHz: Double = 0
+    public var frequency: Measurement<UnitFrequency>
+
+    init(frequency: Measurement<UnitFrequency>) {
+        self.frequency = frequency
+    }
 }
 
 public struct FrequencyScanResults {
-    public var trials = [FrequencyTrial]()
-    public var bestFrequency: Double = 0
-}
-
-extension Notification.Name {
-    public static let PumpOpsSynchronousDidReceivePacket = NSNotification.Name(rawValue: "com.rileylink.RileyLinkKit.PumpOpsSynchronousDidReceivePacket")
+    public var trials: [FrequencyTrial]
+    public var bestFrequency: Measurement<UnitFrequency>
 }

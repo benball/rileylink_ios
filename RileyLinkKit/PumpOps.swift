@@ -14,9 +14,9 @@ import RileyLinkBLEKit
 public class PumpOps {
     
     public let pumpState: PumpState
-    public let device: RileyLinkBLEDevice
+    public let device: RileyLinkDevice
     
-    public init(pumpState: PumpState, device: RileyLinkBLEDevice) {
+    public init(pumpState: PumpState, device: RileyLinkDevice) {
         self.pumpState = pumpState
         self.device = device
     }
@@ -129,7 +129,6 @@ public class PumpOps {
      */
     public func getHistoryEvents(since startDate: Date, completion: @escaping (Either<(events: [TimestampedHistoryEvent], pumpModel: PumpModel), Error>) -> Void) {
         device.runSession(withName: "Get history events") { (session) -> Void in
-            NSLog("History fetching task started.")
             let ops = PumpOpsSynchronous(pumpState: self.pumpState, session: session)
             do {
                 let (events, pumpModel) = try ops.getHistoryEvents(since: startDate)
@@ -153,7 +152,6 @@ public class PumpOps {
      */
     public func getGlucoseHistoryEvents(since startDate: Date, completion: @escaping (Either<[TimestampedGlucoseEvent], Error>) -> Void) {
         device.runSession(withName: "Get glucose history events") { (session) -> Void in
-            NSLog("Glucose history fetching task started.")
             let ops = PumpOpsSynchronous(pumpState: self.pumpState, session: session)
             do {
                 let events = try ops.getGlucoseHistoryEvents(since: startDate)
@@ -166,7 +164,6 @@ public class PumpOps {
 
     public func writeGlucoseHistoryTimestamp(completion: @escaping (Either<Bool, Error>) -> Void) {
         device.runSession(withName: "Write glucose history timestamp") { (session) -> Void in
-            NSLog("Write glucose history timestamp started.")
             let ops = PumpOpsSynchronous(pumpState: self.pumpState, session: session)
             do {
                 _ = try ops.writeGlucoseHistoryTimestamp()
@@ -283,6 +280,7 @@ public class PumpOps {
                 try ops.changeTime {
                     PumpMessage(packetType: .carelink, address: self.pumpState.pumpID, messageType: .changeTime, messageBody: ChangeTimeCarelinkMessageBody(dateComponents: generator())!)
                 }
+
                 completion(nil)
             } catch let error {
                 completion(error)
@@ -320,12 +318,14 @@ public class PumpOps {
         }
     }
 
-    func tuneRadio(for region: PumpRegion = .northAmerica, completion: @escaping (Either<FrequencyScanResults, Error>) -> Void)  {
+    public func tuneRadio(completion: @escaping (Either<FrequencyScanResults, Error>) -> Void)  {
         device.runSession(withName: "Tune pump") { (session) -> Void in
             let ops = PumpOpsSynchronous(pumpState: self.pumpState, session: session)
+            let region = self.pumpState.pumpRegion
             do {
                 try ops.configureRadio(for: region)
                 let response = try ops.tuneRadio(for: region)
+                self.pumpState.lastTuned = Date()
                 completion(.success(response))
             } catch let error {
                 completion(.failure(error))

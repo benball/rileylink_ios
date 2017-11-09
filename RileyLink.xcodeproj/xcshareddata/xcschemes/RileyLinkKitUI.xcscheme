@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "431CE76E1F98564100255374"
-               BuildableName = "RileyLinkBLEKit.framework"
-               BlueprintName = "RileyLinkBLEKit"
+               BlueprintIdentifier = "43D5E78D1FAF7BFB004ACDB7"
+               BuildableName = "RileyLinkKitUI.framework"
+               BlueprintName = "RileyLinkKitUI"
                ReferencedContainer = "container:RileyLink.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -29,26 +29,7 @@
       language = ""
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "431CE7761F98564200255374"
-               BuildableName = "RileyLinkBLEKitTests.xctest"
-               BlueprintName = "RileyLinkBLEKitTests"
-               ReferencedContainer = "container:RileyLink.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
-      <MacroExpansion>
-         <BuildableReference
-            BuildableIdentifier = "primary"
-            BlueprintIdentifier = "431CE76E1F98564100255374"
-            BuildableName = "RileyLinkBLEKit.framework"
-            BlueprintName = "RileyLinkBLEKit"
-            ReferencedContainer = "container:RileyLink.xcodeproj">
-         </BuildableReference>
-      </MacroExpansion>
       <AdditionalOptions>
       </AdditionalOptions>
    </TestAction>
@@ -66,9 +47,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "431CE76E1F98564100255374"
-            BuildableName = "RileyLinkBLEKit.framework"
-            BlueprintName = "RileyLinkBLEKit"
+            BlueprintIdentifier = "43D5E78D1FAF7BFB004ACDB7"
+            BuildableName = "RileyLinkKitUI.framework"
+            BlueprintName = "RileyLinkKitUI"
             ReferencedContainer = "container:RileyLink.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -84,9 +65,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "431CE76E1F98564100255374"
-            BuildableName = "RileyLinkBLEKit.framework"
-            BlueprintName = "RileyLinkBLEKit"
+            BlueprintIdentifier = "43D5E78D1FAF7BFB004ACDB7"
+            BuildableName = "RileyLinkKitUI.framework"
+            BlueprintName = "RileyLinkKitUI"
             ReferencedContainer = "container:RileyLink.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

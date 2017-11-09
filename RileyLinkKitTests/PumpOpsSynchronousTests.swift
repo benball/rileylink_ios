@@ -18,7 +18,6 @@ class PumpOpsSynchronousTests: XCTestCase {
     var pumpState: PumpState!
     var pumpID: String!
     var pumpRegion: PumpRegion!
-    var rileyLinkCmdSession: RileyLinkCmdSession!
     var pumpModel: PumpModel!
     var messageSenderStub: PumpMessageSenderStub!
 
@@ -45,8 +44,7 @@ class PumpOpsSynchronousTests: XCTestCase {
         pumpID = "350535"
         pumpRegion = .worldWide
         pumpModel = PumpModel.model523
-        
-        rileyLinkCmdSession = RileyLinkCmdSession()
+
         messageSenderStub = PumpMessageSenderStub()
         
         setUpSUT()
@@ -58,7 +56,7 @@ class PumpOpsSynchronousTests: XCTestCase {
         pumpState.pumpModel = pumpModel
         pumpState.awakeUntil = Date(timeIntervalSinceNow: 100) // pump is awake
         
-        sut = PumpOpsSynchronous(pumpState: pumpState, session: rileyLinkCmdSession, pumpMessageSender: messageSenderStub)
+        sut = PumpOpsSynchronous(pumpState: pumpState, session: messageSenderStub)
     }
     
     /// Duplicates logic in setUp with a new PumpModel
@@ -310,7 +308,7 @@ class PumpOpsSynchronousTests: XCTestCase {
 // from comment at https://gist.github.com/szhernovoy/276e69eb90a0de84dd90
 func randomDataString(length:Int) -> String {
     let charSet = "abcdef0123456789"
-    var c = charSet.characters.map { String($0) }
+    var c = charSet.map { String($0) }
     var s:String = ""
     for _ in 0..<length {
         s.append(c[Int(arc4random()) % c.count])
@@ -318,14 +316,25 @@ func randomDataString(length:Int) -> String {
     return s
 }
 
-class PumpMessageSenderStub : PumpMessageSender {
+class PumpMessageSenderStub: PumpMessageSender {
+    func writeCommand(_ command: Command, timeout: TimeInterval) throws -> Data {
+        return Data()
+    }
+
+    func updateRegister(_ address: CC111XRegister, value: UInt8) throws {
+        throw PumpCommsError.noResponse(during: "Tests")
+    }
+
+    func setBaseFrequency(_ frequency: Measurement<UnitFrequency>) throws {
+        throw PumpCommsError.noResponse(during: "Tests")
+    }
     
     var responses = [MessageType: [PumpMessage]]()
     
     // internal tracking of how many times a response type has been received
     private var responsesHaveOccured = [MessageType: Int]()
-    
-    func sendAndListen(_ msg: PumpMessage, timeoutMS: UInt32, repeatCount: UInt8 = 0, msBetweenPackets: UInt8 = 0, retryCount: UInt8 = 3) throws -> PumpMessage {
+
+    func sendAndListen(_ msg: PumpMessage, timeoutMS: UInt32, repeatCount: UInt8, msBetweenPackets: UInt8, retryCount: UInt8) throws -> PumpMessage {
         
         if let responseArray = responses[msg.messageType] {
             let numberOfResponsesReceived: Int
